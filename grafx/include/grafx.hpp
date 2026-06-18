@@ -15,11 +15,10 @@ struct Vec3D {
     float x, y, z;
     Vec3D(float x = 0, float y = 0, float z = 0) : x(x), y(y), z(z) {}
     
+    bool operator==(const Vec3D& v) const { return x == v.x && y == v.y && z == v.z; }
     Vec3D operator+(const Vec3D& v) const { return Vec3D(x + v.x, y + v.y, z + v.z); }
     Vec3D operator-(const Vec3D& v) const { return Vec3D(x - v.x, y - v.y, z - v.z); }
-    Vec3D operator^(const Vec3D& v) const { return Vec3D(x * v.x, y * v.y, z * v.z); }
-    Vec3D operator*(const Vec3D& v) const { return Vec3D(x - v.x, y - v.y, z - v.z); }
-    Vec3D operator*(float s) const { return Vec3D(x * s, y * s, z * s); }
+    Vec3D operator*(float c) const { return Vec3D(x * c, y * c, z * c); }
 
     float length() const { return std::sqrt(x*x + y*y + z*z); }
     /**
@@ -40,7 +39,7 @@ struct Vec3D {
 struct Face {
     int v1, v2, v3;
     int vn;
-    Face() : v1(0), v2(0), v3(0), vn(0) {}
+    Face(int v1 = 0, int v2 = 0, int v3 = 0, int vn = 0) : v1(v1), v2(v2), v3(v3), vn(vn) {}
 };
 
 /**
@@ -53,17 +52,6 @@ struct Face {
  * @param loadFromFile Не вызывать дважды!!!.
  */
 class Obj3D {
-    private:
-    /**
-    * @brief Проверяет, что грани ссылаются на существующие вершины и нормали.
-    * @return false если понадобится для строгой проверки.
-    */
-    bool checkCorrect();
-    /**
-    * @brief Вычисляет отсутствующие нормали для граней.
-    * @todo Сделать оператор векторного умножения (см. Vec3D).
-    */
-    void calculateNormals();
 public:
     std::vector<Vec3D> vertices, normals;
     std::vector<Face> faces;
@@ -78,6 +66,16 @@ public:
     * НЕ ОСТАНАВЛИВАЕТСЯ ПРИ ОШИБКАХ В ФАЙЛЕ (только предупреждает).
     */
     bool loadFromFile(const std::string& filename);
+    /**
+    * @brief Проверяет, что грани ссылаются на существующие вершины и нормали.
+    * @return false если понадобится для строгой проверки.
+    */
+    int checkCorrect() const;
+    /**
+    * @brief Вычисляет отсутствующие нормали для граней.
+    * @todo Сделать оператор векторного умножения (см. Vec3D).
+    */
+    void calculateNormals();
 };
 
 /**

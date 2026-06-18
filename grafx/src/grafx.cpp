@@ -5,18 +5,17 @@
 #include <iostream>
 #include <cmath>
 
-bool Obj3D::checkCorrect() {
-    bool result { true };
+int Obj3D::checkCorrect() const {
     for (int i = 0; i < faces.size(); i++) {
         if (
             faces[i].v1 > vertices.size() || faces[i].v2 > vertices.size() ||
             faces[i].v1 > vertices.size() || faces[i].vn > normals.size()
         ) {
             std::cerr << "Face " << i <<" contains a nonexistent vector" << std::endl;
-            result = false;
+            return i;
         }
     }
-    return result;
+    return -1;
 }
 
 void Obj3D::calculateNormals() {
@@ -77,9 +76,10 @@ bool Obj3D::loadFromFile(const std::string& filename) {
         }
     }
     file.close();
-    checkCorrect();
+    if (checkCorrect() != -1) {
+        return false;
+    }
     calculateNormals();
-    checkCorrect();
     return !faces.empty();
 }
 
