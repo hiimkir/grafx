@@ -1,206 +1,9 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <vector>
-#include <fstream>
-#include <sstream>
+#include "grafx/include/grafx.hpp"
 #include <string>
 #include <cmath>
 #include <iostream>
-
-/**
- * @brief Вектор.
- * @details Реализовано: сложение, вычитание, домножение на число (float)
- * @todo Векторное и скалярное произведение
- * 
- * @param x, y, z Координаты.
- * @param length Длина. Требует cmath
- * @param normalize Нормализует вектор. Процедура без rvalue (см. notes)
- */
-struct Vec3D {
-    float x, y, z;
-    Vec3D(float x = 0, float y = 0, float z = 0) : x(x), y(y), z(z) {}
-    
-    Vec3D operator+(const Vec3D& v) const { return Vec3D(x + v.x, y + v.y, z + v.z); }
-    Vec3D operator-(const Vec3D& v) const { return Vec3D(x - v.x, y - v.y, z - v.z); }
-    Vec3D operator^(const Vec3D& v) const { return Vec3D(x * v.x, y * v.y, z * v.z); }
-    Vec3D operator*(const Vec3D& v) const { return Vec3D(x - v.x, y - v.y, z - v.z); }
-    Vec3D operator*(float s) const { return Vec3D(x * s, y * s, z * s); }
-
-    float length() const { return std::sqrt(x*x + y*y + z*z); }
-    /**
-    * @brief Нормализует вектор.
-    * @note Ничего не возвращает!
-    */
-    void normalize() { float l = length(); if (l > 0 && l != 1) { x /= l; y /= l; z /= l; } }
-};
-
-/**
- * @brief Грань.
- * @details Хранит индексы векторов хранящихся в Obj3D. Нумерация с 1; 0 - отсутствует вектор.
- * По умолчанию все поля 0.
- * 
- * @param v1, v2, v3 Индексы вершин.
- * @param vn Индекс вектора нормали.
- */
-struct Face {
-    int v1, v2, v3;
-    int vn;
-    Face() : v1(0), v2(0), v3(0), vn(0) {}
-};
-
-/**
- * @brief 3Д модель.
- * @details Загружает из файла и проверяет корректность.
- * Здесь хранится фигура в исходном виде, отрисовка делается отрисовщиком, поэтому поля открыты.
- * Перемещение делается через матрицу в основном цикле отрисовки.
- * 
- * @param vertices, normals, faces Для отрисовщика.
- * @param loadFromFile Не вызывать дважды!!!.
- */
-class Obj3D {
-private:
-    /**
-    * @brief Проверяет, что грани ссылаются на существующие вершины и нормали.
-    * @return false если понадобится для строгой проверки.
-    */
-    bool checkCorrect() {
-        bool result { true };
-        for (int i = 0; i < faces.size(); i++) {
-            if (
-                faces[i].v1 > vertices.size() || faces[i].v2 > vertices.size() ||
-                faces[i].v1 > vertices.size() || faces[i].vn > normals.size()
-            ) {
-                std::cerr << "Face " << i <<" contains a nonexistent vector" << std::endl;
-                result = false;
-            }
-        }
-        return result;
-    }
-
-    /**
-    * @brief Вычисляет отсутствующие нормали для граней.
-    * @todo Сделать оператор векторного умножения (см. Vec3D).
-    */
-    void calculateNormals() {
-        for (auto& f : faces) {
-            if (f.vn != 0) continue;
-
-            Vec3D edge1 = vertices[f.v2 - 1] - vertices[f.v1 - 1];
-            Vec3D edge2 = vertices[f.v3 - 1] - vertices[f.v1 - 1];
-            Vec3D normal(
-                edge1.y * edge2.z - edge1.z * edge2.y,
-                edge1.z * edge2.x - edge1.x * edge2.z,
-                edge1.x * edge2.y - edge1.y * edge2.x
-            );
-            normal.normalize();
-            normals.push_back(normal);
-            f.vn = normals.size();
-        }
-    }
-
-public:
-    std::vector<Vec3D> vertices;
-    std::vector<Vec3D> normals;
-    std::vector<Face> faces;
-
-    /**
-    * @brief Загружает 3D модель.
-    * @details Читает только префиксы v, vn, f.
-    * Для граней реализованы все варианты синтаксиса
-    * 
-    * @param file_path Путь.
-    * @returns false если файл не открылся.
-    * @note Автоматом проверяет и вычисляет нормали.
-    * НЕ ОСТАНАВЛИВАЕТСЯ ПРИ ОШИБКАХ В ФАЙЛЕ (только предупреждает).
-    */
-    bool loadFromFile(const std::string& filename) {
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open file: " << filename << std::endl;
-            return false;
-        }
-
-        std::string line;
-        while (std::getline(file, line)) {
-            std::istringstream iss(line);
-            std::string prefix;
-            iss >> prefix;
-
-            if (prefix == "v") {
-                Vec3D v;
-                iss >> v.x >> v.y >> v.z;
-                vertices.push_back(v);
-            }
-            else if (prefix == "vn") {
-                Vec3D v;
-                iss >> v.x >> v.y >> v.z;
-                normals.push_back(v);
-            }
-            else if (prefix == "f") {
-                Face f;
-                std::string vertexData;
-                for (int i = 0; i < 3; i++) {
-                    iss >> vertexData;
-                    std::istringstream viss(vertexData);
-                    if (i == 0) {
-                        std::string indexData;
-                        std::getline(viss, indexData, '/');
-                        f.v1 = std::stoi(indexData);
-                        std::getline(viss, indexData, '/');
-                        if (std::getline(viss, indexData, '/')) viss >> f.vn;
-                    }
-                    else if (i == 1) viss >> f.v2;
-                    else if (i == 2) viss >> f.v3;
-                }
-                faces.push_back(f);
-            }
-        }
-
-        file.close();
-        checkCorrect();
-        calculateNormals();
-        checkCorrect();
-        return !faces.empty();
-    }
-};
-
-/**
-* @brief Матрица.
-* @details Всё перемещение объекта в пространстве делать через неё.
-* @param Matrix4x4 Единичная матрица.
-* @param rotationY Матрица вращения (см. описание).
-* @param transform Возвращает новый вектор с новыми координатами.
-*/
-struct Matrix4x4 {
-    float m[4][4];
-    
-    Matrix4x4() {
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
-                m[i][j] = (i == j) ? 1.0f : 0.0f;
-    }
-    
-    /**
-    * @brief Матрица вращения.
-    * @details Альтернативный конструктор. Вращает только по оси Y
-    * @param angle Угол в радианах.
-    */
-    static Matrix4x4 rotationY(float angle) {
-        Matrix4x4 mat;
-        float c = std::cos(angle);
-        float s = std::sin(angle);
-        mat.m[0][0] = c;  mat.m[0][2] = s;
-        mat.m[2][0] = -s; mat.m[2][2] = c;
-        return mat;
-    }
-    
-    Vec3D transform(const Vec3D& v) const {
-        float x = m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3];
-        float y = m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3];
-        float z = m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3];
-        return Vec3D(x, y, z);
-    }
-};
 
 /**
 * @brief Основной класс.
@@ -240,7 +43,7 @@ private:
     * @brief Обработка ввода.
     * Реализовано:
     * Выход на ESC и крестик
-    * Контроль вращения на +{=}, -, пробел
+    * Контроль вращения на +(=), -, пробел
     * Приближение на стрелки
     * 
     */
@@ -389,7 +192,7 @@ public:
     
     /**
     * @brief Основной цикл.
-    * @note Окно должно быть инициализированно заранее. Выполняется в пока running = true. Привязан к частоте в 60FPS.
+    * @note Окно должно быть инициализированно заранее. Выполняется пока running = true. Привязан к частоте в 60FPS.
     */
     void run() {
         while (running) {

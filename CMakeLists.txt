@@ -6,7 +6,7 @@ project(viewer3d VERSION 1.0)
 
 # add_subdirectory(doctest)
 # add_subdirectory(tests)
-# add_subdirectory(grafx)
+add_subdirectory(grafx)
 
 # if downloaded from packet manager
 # find_package(SDL3)
