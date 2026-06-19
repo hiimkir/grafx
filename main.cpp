@@ -22,8 +22,10 @@ private:
     bool running;
 
     Obj3D model;
-    float rotationAngle;
-    float speed;
+    float rotationAngle, speed;
+
+    Vec3D light;
+    bool opaque;
     
     Vec3D cameraPos;
     float distance;
@@ -32,7 +34,7 @@ private:
     * @brief Меняет текущий поворот модели.
     * @param angle Поворот в радианах.
     */
-    void update(float angle) {
+    void update(const float angle) {
         rotationAngle += angle;
         if (rotationAngle > 2 * M_PI) {
             rotationAngle -= 2 * M_PI;
@@ -43,7 +45,8 @@ private:
     * @brief Обработка ввода.
     * Реализовано:
     * Выход на ESC и крестик
-    * Контроль вращения на +(=), -, пробел
+    * Вращение мышкой
+    * Автовращение на +(=), -, пробел
     * Приближение на стрелки
     * 
     */
@@ -63,12 +66,24 @@ private:
                 else if (event.key.key == SDLK_SPACE) speed = 0;
                 else if (event.key.key == SDLK_DOWN) distance += 1.0f;
                 else if (event.key.key == SDLK_UP) distance -= 1.0f;
+                else if (event.key.key == SDLK_C) opaque = !opaque;
+                else if (event.key.key == SDLK_LEFT) moveLight(0.5f);
+                else if (event.key.key == SDLK_RIGHT) moveLight(-0.5f);
             }
-            else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-
-                
+            else if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.state > 0) {
+                speed = 0;
+                update(-event.motion.xrel / 100);
             }
         }
+    }
+    
+    /**
+    * @brief Поворачивает освещение
+    * @param angle Поворот в радианах.
+    */
+    void moveLight(const float angle) {
+        auto rotationMatrix = Matrix4x4::rotationY(angle);
+        light = rotationMatrix.transform(light);
     }
 
     /**
@@ -79,21 +94,20 @@ private:
      * @return Двумерные координаты.
      */
     SDL_FPoint projectPoint(const Vec3D& point3D) {
-        float fov = 1.0f;
-        float aspect = (float)windowWidth / windowHeight;
+        float fov{ 1.0f };
         
-        Vec3D viewSpace = point3D - cameraPos;
-        float z = viewSpace.z + distance;
+        Vec3D viewSpace{ point3D - cameraPos };
+        float z{ viewSpace.z + distance};
         
-        if (z <= 0.1f) return {-1000, -1000};
+        if (z <= 0.1f) return { -1000, -1000 };
         
-        float x = viewSpace.x * fov / z * 200.0f;
-        float y = -viewSpace.y * fov / z * 200.0f;
+        float x{ viewSpace.x * fov / z * 200.0f };
+        float y{ -viewSpace.y * fov / z * 200.0f };
         
-        x = x + windowWidth / 2.0f;
-        y = y + windowHeight / 2.0f;
+        x += windowWidth / 2.0f;
+        y += windowHeight / 2.0f;
         
-        return {x, y};
+        return { x, y };
     }
 
     /**
@@ -106,43 +120,56 @@ private:
         
         if (model.faces.empty()) return;
         
-        Matrix4x4 rotationMatrix = Matrix4x4::rotationY(rotationAngle);
+        auto rotationMatrix = Matrix4x4::rotationY(rotationAngle);
         
         for (const auto& f : model.faces) {
             if (f.v1 <= 0 || f.v2 <= 0 || f.v3 <= 0) continue;
-            if (f.v1 > (int)model.vertices.size() || 
-                f.v2 > (int)model.vertices.size() || 
-                f.v3 > (int)model.vertices.size()) continue;
+                        
+            auto p1{ projectPoint(rotationMatrix.transform(model.vertices[f.v1 - 1])) };
+            auto p2{ projectPoint(rotationMatrix.transform(model.vertices[f.v2 - 1])) };
+            auto p3{ projectPoint(rotationMatrix.transform(model.vertices[f.v3 - 1])) };
             
-            Vec3D v1 = model.vertices[f.v1 - 1];
-            Vec3D v2 = model.vertices[f.v2 - 1];
-            Vec3D v3 = model.vertices[f.v3 - 1];
-            
-            Vec3D rv1 = rotationMatrix.transform(v1);
-            Vec3D rv2 = rotationMatrix.transform(v2);
-            Vec3D rv3 = rotationMatrix.transform(v3);
-            
-            SDL_FPoint p1 = projectPoint(rv1);
-            SDL_FPoint p2 = projectPoint(rv2);
-            SDL_FPoint p3 = projectPoint(rv3);
-            
-            if (p1.x == -1000 && p1.y == -1000) continue;
-            if (p2.x == -1000 && p2.y == -1000) continue;
-            if (p3.x == -1000 && p3.y == -1000) continue;
+            if (
+                p1.x == -1000 && p1.y == -1000 ||
+                p2.x == -1000 && p2.y == -1000 ||
+                p3.x == -1000 && p3.y == -1000
+            ) continue;
 
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             SDL_RenderLine(renderer, p1.x, p1.y, p2.x, p2.y);
             SDL_RenderLine(renderer, p2.x, p2.y, p3.x, p3.y);
             SDL_RenderLine(renderer, p3.x, p3.y, p1.x, p1.y);
+
+            if (opaque) continue;
+            if ((
+                rotationMatrix.transform(model.normals[f.vn - 1]) -
+                cameraPos*0.2f).length() > 1.5f
+            ) continue;
+
+            SDL_Vertex polygon[3];
+
+            polygon[0].position = p1;
+            polygon[1].position = p2;
+            polygon[2].position = p3;
+
+            auto shade{ (rotationMatrix.transform(model.normals[f.vn - 1]) - light).length() };
+
+            polygon[0].color = { shade, shade, shade, 255 };
+            polygon[1].color = { shade, shade, shade, 255 };
+            polygon[2].color = { shade, shade, shade, 255 };
+
+            SDL_RenderGeometry(renderer, nullptr, polygon, 3, nullptr, 0);
         }
         
         SDL_RenderPresent(renderer);
     }
 
 public:
-    SDLApp() : window(nullptr), renderer(nullptr), windowWidth(800), windowHeight(600),
-               running(true),
-               rotationAngle(0), speed(0.01f), cameraPos(0, 0, -5), distance(5.0f) {}
+    SDLApp() : window(nullptr), windowWidth(800), windowHeight(600),
+               renderer(nullptr), running(true),
+               rotationAngle(0), speed(0.01f), opaque(false),
+               cameraPos(0, 0, -5), distance(5.0f),
+               light(-1, 0, -1) { light.normalize(); }
     
     ~SDLApp() {
         if (renderer) SDL_DestroyRenderer(renderer);
@@ -211,8 +238,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to initialize application" << std::endl;
         return 1;
     }
-    
-    std::string file_path {"assets/cube.obj"};
+
+    std::string file_path{ "assets/cube.obj" };
     if (argc > 1) file_path = argv[1];
     if (!app.loadModel(file_path)) {
         return 1;
