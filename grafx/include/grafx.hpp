@@ -4,12 +4,10 @@
 
 /**
  * @brief Вектор.
- * @details Реализовано: сложение, вычитание, домножение на число (float)
+ * @details Реализовано: сложение, вычитание, домножение на натуральное число
  * @todo Векторное и скалярное произведение
  * 
  * @param x, y, z Координаты.
- * @param length Длина. Требует cmath
- * @param normalize Нормализует вектор. Процедура без rvalue (см. notes)
  */
 struct Vec3D {
     float x, y, z;
@@ -20,6 +18,11 @@ struct Vec3D {
     Vec3D operator-(const Vec3D& v) const { return Vec3D(x - v.x, y - v.y, z - v.z); }
     Vec3D operator*(float c) const { return Vec3D(x * c, y * c, z * c); }
 
+    /**
+     * @brief Возвращает длину вектора.
+     * @details Зависит от cmath
+     * @return float
+     */
     float length() const { return std::sqrt(x*x + y*y + z*z); }
     /**
     * @brief Нормализует вектор.
@@ -49,7 +52,6 @@ struct Face {
  * Перемещение делается через матрицу в основном цикле отрисовки.
  * 
  * @param vertices, normals, faces Для отрисовщика.
- * @param loadFromFile Не вызывать дважды!!!.
  */
 class Obj3D {
 public:
@@ -64,6 +66,7 @@ public:
     * @returns false если файл не открылся.
     * @note Автоматом проверяет и вычисляет нормали.
     * НЕ ОСТАНАВЛИВАЕТСЯ ПРИ ОШИБКАХ В ФАЙЛЕ (только предупреждает).
+    * @note Не очищает поля перед загрузкой => не вызывать дважды.
     */
     bool loadFromFile(const std::string& filename);
     /**
@@ -82,12 +85,12 @@ public:
 * @brief Матрица.
 * @details Всё перемещение объекта в пространстве делать через неё.
 * @param Matrix4x4 Единичная матрица.
-* @param rotationY Матрица вращения (см. описание).
-* @param transform Возвращает новый вектор с новыми координатами.
 */
 struct Matrix4x4 {
     float m[4][4];
-    
+    /**
+     * @brief Единичная матрица
+     */
     Matrix4x4();
     
     /**

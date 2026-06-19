@@ -208,7 +208,7 @@ public:
     * 
     * @param file_path Путь.
     */
-    bool loadModel(const auto& file_path) {
+    bool loadModel(const std::string& file_path) {
         if (!model.loadFromFile(file_path)) {
             std::cerr << "Failed to load " << file_path << std::endl;
             return false;
